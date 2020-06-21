@@ -1,4 +1,5 @@
 use crate::{provider::ProviderError, JsonRpcClient};
+use ethers_core::types::U256;
 
 use async_trait::async_trait;
 use async_tungstenite::tungstenite::{self, protocol::Message};
@@ -8,8 +9,7 @@ use futures_util::{
     stream::{Stream, StreamExt},
 };
 use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::{fmt::Debug, collections::HashMap, sync::atomic::{AtomicU64, Ordering}};
 use thiserror::Error;
 
 use super::common::{JsonRpcError, Request, ResponseData};
@@ -93,7 +93,10 @@ pub type MaybeTlsStream = StreamSwitcher<TcpStream, TlsStream<TcpStream>>;
 pub struct Provider<S> {
     id: AtomicU64,
     ws: Mutex<S>,
+    responses: Mutex<HashMap<U256, Response>>,
 }
+
+type Response = Result<serde_json::Value, ProviderError>;
 
 #[cfg(any(feature = "tokio-runtime", feature = "async-std-runtime"))]
 impl Provider<WebSocketStream<MaybeTlsStream>> {
@@ -121,6 +124,7 @@ where
         Self {
             id: AtomicU64::new(0),
             ws: Mutex::new(ws),
+            responses: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -177,6 +181,8 @@ where
 
         // send the message
         let payload = serde_json::to_string(&Request::new(next_id, method, params))?;
+
+        // create a channel
         lock.send(Message::text(payload)).await?;
 
         // get the response bytes
@@ -191,4 +197,34 @@ where
 
         Ok(data.into_result()?)
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ethers_core::{utils::serialize, types::{Block, TxHash}};
+
+    #[tokio::test]
+    async fn ws_subscription() {
+        let ws = Provider::connect("ws://localhost:8546").await.unwrap();
+        let block: Block<TxHash> = ws.request("eth_getBlockByNumber", [serialize(&U256::from(10u64)), serialize(&false)]).await.unwrap();
+        dbg!(block);
+        let sub_id: U256 = ws.request("eth_subscribe", ["newHeads"]).await.unwrap();
+
+        let mut inner = ws.ws.lock().await;
+        while let Some(resp) = inner.next().await {
+            let resp = resp.unwrap();
+            let data: crate::transports::common::Notification<Block<TxHash>> = match resp {
+                Message::Text(ref inner) => serde_json::from_str(inner).unwrap(),
+                Message::Binary(ref inner) => serde_json::from_slice(inner).unwrap(),
+                // TODO: Should we do something if we receive a Ping, Pong or Close?
+                _ => panic!()
+            };
+
+            dbg!(data);
+        }
+
+        123;
+    }
+
 }

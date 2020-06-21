@@ -1,4 +1,5 @@
 // Code adapted from: https://github.com/althea-net/guac_rs/tree/master/web3/src/jsonrpc
+use ethers_core::types::U256;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fmt;
@@ -32,6 +33,20 @@ pub struct Request<'a, T> {
     jsonrpc: &'a str,
     method: &'a str,
     params: T,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+/// A JSON-RPC Notifcation
+pub struct Notification<'a, R> {
+    jsonrpc: &'a str,
+    method: &'a str,
+    pub params: Subscription<R>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Subscription<R> {
+    pub subscription: U256,
+    pub result: R,
 }
 
 impl<'a, T> Request<'a, T> {
