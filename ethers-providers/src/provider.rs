@@ -133,6 +133,19 @@ impl<P: JsonRpcClient> Provider<P> {
         })
     }
 
+    pub async fn get_validators_public_keys(
+        &self,
+        block_number: String,
+    ) -> Result<Vec<Vec<u8>>, ProviderError> {
+        Ok(self
+            .0
+            .request("istanbul_getValidatorsPublicKeys", [block_number])
+            .await
+            .map_err(Into::into)?)
+    }
+
+
+
     /// Gets the transaction with `transaction_hash`
     pub async fn get_transaction<T: Send + Sync + Into<TxHash>>(
         &self,
