@@ -133,13 +133,13 @@ impl<P: JsonRpcClient> Provider<P> {
         })
     }
 
-    pub async fn get_validators_public_keys(
+    pub async fn get_validators_bls_public_keys(
         &self,
         block_number: String,
-    ) -> Result<Vec<Vec<u8>>, ProviderError> {
+    ) -> Result<Vec<String>, ProviderError> {
         Ok(self
             .0
-            .request("istanbul_getValidatorsPublicKeys", [block_number])
+            .request("istanbul_getValidatorsBLSPublicKeys", [block_number])
             .await
             .map_err(Into::into)?)
     }
